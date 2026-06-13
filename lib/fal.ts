@@ -212,12 +212,24 @@ export function bannerRequest(prompt: string, aspect: string | undefined, count:
 // Returns null if no master is configured (caller falls back to the LoRA / banner path).
 export function masterRequest(prompt: string, aspect: string | undefined, count: number) {
   if (!MASTER_URL) return null;
+  const req = prompt.trim() || "the same wizard on a simple plain background";
+  // Identity is HARD-LOCKED (esp. the no-neck hood geometry + robe shape), but pose / props / scene
+  // are FREE so the request actually renders. Verified on a batch (surfboard, spell-cast, broom,
+  // cross-legged): neck + robe held in every one; only the held orb is "sticky" on prop-swap prompts.
   const p =
-    "Recolor this exact wizard and change its background to match the request, keeping the character " +
-    "IDENTICAL in every other way — the same head, the same hood framing the face, the same glowing " +
-    "eyes, the same black mitten gloves, the same simple straight dress robe shape, and the exact same " +
-    "glossy cel-shaded cartoon art style with bold clean outlines. Change ONLY the robe colour and the " +
-    `background/scene. Request: ${prompt.trim() || "keep the same colour, simple plain background"}`;
+    "Transform this exact wizard into a new illustration that clearly depicts the request below, " +
+    "while keeping its IDENTITY perfectly intact. " +
+    "KEEP IDENTICAL — do NOT change: the dark featureless face with two large glowing white oval " +
+    "eyes; the hood wrapping snugly around the face and framing it on EVERY side INCLUDING directly " +
+    "under the chin, so NO neck, throat or skin is ever visible below the face; the smooth black " +
+    "mitten gloves; the simple one-piece A-line hooded robe with a curled pointed hood tip and smooth " +
+    "sides (no cape, no side flaps); and the glossy cel-shaded cartoon art style with bold clean " +
+    "outlines, vibrant colours and soft cinematic lighting. " +
+    "YOU MAY freely change to fulfil the request: the wizard's pose and body position, what its hands " +
+    "hold or do, any props or objects, and the entire background and scene. If the request implies " +
+    "the hands are holding or doing something other than a glowing orb, the orb is gone and replaced " +
+    "accordingly. The requested action and setting must be obviously and clearly visible. " +
+    `Request: ${req}`;
   return { model: MODELS.imageEdit, input: kontextInput(MASTER_URL, p, aspect, count) };
 }
 
