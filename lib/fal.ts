@@ -49,7 +49,8 @@ const STYLE_HINT: Record<string, string> = {
 export const WIZ_EYES =
   "its dark face with two large glowing white oval eyes peeking out from a snug oval hood " +
   "opening, the hood's fabric framing the face on every side including underneath it, black " +
-  "visible only inside the hood opening";
+  "visible only inside the hood opening, the face completely smooth and featureless with NO " +
+  "mouth, no nose and no other facial features at all — only the two glowing eyes";
 export const WIZ_ROBE =
   "one simple plain hooded robe with a curled pointed hood tip, falling straight down as a single " +
   "smooth one-piece A-line, wide sleeves, completely smooth sides — no cape, no side slits, no " +
@@ -61,7 +62,7 @@ export const WIZ_STYLE =
 export function buildPrompt(prompt: string, style?: string | null, useLora = false): string {
   const extra = style && STYLE_HINT[style] ? `, ${STYLE_HINT[style]}` : "";
   if (useLora) {
-    return `wzrdz, a single Wizardz wizard, ${prompt.trim()}, ${WIZ_EYES}, ${WIZ_ROBE}, ${WIZ_HANDS}, ${WIZ_STYLE}${extra}`;
+    return `wzrdz, a single Wizardz wizard, ${prompt.trim()}, the wizard large and prominent in the frame with a full visible body and minimal empty background, ${WIZ_EYES}, ${WIZ_ROBE}, ${WIZ_HANDS}, ${WIZ_STYLE}${extra}`;
   }
   return `${prompt.trim()}. Wizardz character art: ${WIZ_EYES}, ${WIZ_ROBE}, ${WIZ_HANDS}; ${WIZ_STYLE}${extra}`;
 }
@@ -92,8 +93,8 @@ export function buildWizLoraPrompt(
   // character tokens — the LoRA has a strong single-portrait prior, so we also explicitly
   // ask for a full-body action shot to pull props (surfboard, staff, etc.) into frame.
   const subject = s
-    ? `wzrdz, a single Wizardz wizard ${s}, full-body dynamic action shot`
-    : "wzrdz, a single Wizardz wizard";
+    ? `wzrdz, a single Wizardz wizard ${s}, full-body dynamic action shot, the wizard large and prominent in the frame with minimal empty background`
+    : "wzrdz, a single Wizardz wizard, large and prominent in the frame with a full visible body";
   const traits = traitPhrases && traitPhrases.trim() ? `, ${traitPhrases.trim()}` : "";
   return `${subject}${traits}, ${WIZ_EYES}, ${WIZ_ROBE}, ${WIZ_HANDS}, ${WIZ_STYLE}${styleHint}`;
 }

@@ -76,9 +76,11 @@ export async function pickBest(urls: string[]): Promise<string> {
               type: "text",
               text:
                 `${urls.length} variations of the same cartoon wizard follow, numbered 1 to ${urls.length}. ` +
-                "Pick the SINGLE best one: cleanest and most visually coherent, correct simple anatomy, and " +
-                "with NO floating disconnected objects, glowing blobs stuck in mid-air, glitches, smears, " +
-                "malformed hands, or awkward artifacts. Reply with ONLY the number.",
+                "Pick the SINGLE best one. REQUIRED: a completely FACELESS smooth dark head with ONLY two glowing " +
+                "eyes and absolutely NO mouth, no nose and no smile; clean simple black mitten hands; a " +
+                "well-proportioned body that is not tiny. Then prefer the cleanest, most coherent one with no " +
+                "floating blobs, glitches, smears, malformed hands, or artifacts. STRONGLY reject any variant " +
+                "that has a mouth. Reply with ONLY the number.",
             },
             ...urls.map((url) => ({ type: "image_url" as const, image_url: { url } })),
           ],
