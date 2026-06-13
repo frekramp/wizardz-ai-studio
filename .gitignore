@@ -60,3 +60,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 /public/bestof/
+
+# v13 LoRA training pipeline (regenerable, heavy) — dataset frames + eval grids
+/scripts/train-data/dataset-v13/
+/scripts/test/eval/
