@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "wizardz-ai-studio",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  // Durable shared state for quota / rate-limit / history (lib/kv.ts). Create the namespace with
+  // `wrangler kv namespace create WIZ_KV` and paste the printed id below. Until set, the app falls
+  // back to per-isolate in-memory state (fine for dev/preview, NOT for a paid launch).
+  "kv_namespaces": [{ "binding": "WIZ_KV", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }],
+  "observability": {
+    "enabled": true
+  }
+}

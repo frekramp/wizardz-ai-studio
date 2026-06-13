@@ -1,26 +1,274 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ───────────── Wizardz — fire on warm-dark (palette pulled from the real logo + banner) ───────────── */
+@theme {
+  /* warm near-black surfaces (logo sits on black) */
+  --color-night: #0a0708;
+  --color-panel: #140f0d;
+  --color-card: #1b1512;
+  --color-card-2: #251c17;
+  --color-line: #2e221c;
+  --color-line-soft: #1f1714;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  /* cream ink */
+  --color-ink: #f8f1e8;
+  --color-mute: #b8a698;
+  --color-faint: #8f7b6c;
+
+  /* FIRE — the brand (gold → orange → red, straight off the "W") */
+  --color-gold: #ffc21e;
+  --color-orange: #ff7a18;
+  --color-red: #ea3b23;
+  --color-brand: #ff7a18;
+
+  /* type */
+  --font-display: var(--font-bricolage);
+  --font-sans: var(--font-hanken);
   --font-mono: var(--font-geist-mono);
+
+  /* radii */
+  --radius-lg: 0.85rem;
+  --radius-xl: 1.15rem;
+  --radius-2xl: 1.6rem;
 }
 
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    color-scheme: dark;
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    background-color: var(--color-night);
+    color: var(--color-ink);
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    min-height: 100svh;
+    /* faint ember glow up top */
+    background-image: radial-gradient(
+      90% 60% at 50% -8%,
+      color-mix(in oklab, var(--color-orange) 12%, transparent),
+      transparent 58%
+    );
+    background-attachment: fixed;
+  }
+  h1, h2, h3, h4 {
+    font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--color-orange) 45%, transparent);
+    color: #fff;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-line);
+    border-radius: 999px;
+    border: 3px solid var(--color-night);
+  }
+  ::-webkit-scrollbar-thumb:hover { background: #3a2a22; }
+}
+
+@layer utilities {
+  /* the fire gradient — headline keyword, primary CTA, accents */
+  .text-gradient {
+    background-image: linear-gradient(100deg, var(--color-gold), var(--color-orange) 48%, var(--color-red));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .bg-gradient-brand {
+    background-image: linear-gradient(100deg, var(--color-gold), var(--color-orange) 50%, var(--color-red));
+  }
+  .text-balance { text-wrap: balance; }
+  .ring-focus:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-night), 0 0 0 4px color-mix(in oklab, var(--color-orange) 60%, transparent);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* generating shimmer (ember) */
+.shimmer {
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    color-mix(in oklab, var(--color-orange) 14%, transparent) 40%,
+    color-mix(in oklab, var(--color-gold) 20%, transparent) 50%,
+    color-mix(in oklab, var(--color-orange) 14%, transparent) 60%,
+    transparent 80%
+  );
+  background-size: 220% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+@keyframes shimmer {
+  0% { background-position: -160% 0; }
+  100% { background-position: 260% 0; }
+}
+@keyframes spin-slow { to { transform: rotate(360deg); } }
+.spin-slow { animation: spin-slow 8s linear infinite; }
+
+/* gentle loop to suggest an animated GIF result */
+@keyframes wiz-float {
+  0%, 100% { transform: translateY(0) rotate(-0.5deg); }
+  50% { transform: translateY(-4%) rotate(0.5deg); }
+}
+.wiz-float { animation: wiz-float 2.6s ease-in-out infinite; }
+
+/* ───────────── background fx (prism sweep + grain) — used by the art-wall ───────────── */
+.bgfx-prism {
+  position: absolute;
+  inset: -25%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    color-mix(in oklab, var(--color-gold) 16%, transparent) 40deg,
+    transparent 110deg,
+    color-mix(in oklab, var(--color-red) 14%, transparent) 200deg,
+    transparent 280deg
+  );
+  mix-blend-mode: screen;
+  opacity: 0.55;
+  will-change: transform;
+  animation: prism 20s linear infinite;
+}
+.bgfx-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+@keyframes prism { to { transform: rotate(360deg); } }
+
+/* ───────────── art-wall background (Doodles-style wall of the collection) ───────────── */
+.artwall {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--color-night);
+}
+.artwall-grid {
+  position: absolute;
+  left: -2%;
+  right: -2%;
+  top: -9%;
+  bottom: -9%;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-auto-rows: 150px;
+  gap: 10px;
+  will-change: transform;
+  animation: wallDrift 75s ease-in-out infinite;
+}
+.artwall-tile {
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--color-card);
+  opacity: 0.6;
+  /* Skip render/decode/animation of off-screen tiles (big CPU win for the GIF wall). */
+  content-visibility: auto;
+  contain-intrinsic-size: 150px;
+}
+.artwall-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.artwall-veil {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in oklab, var(--color-night) 60%, transparent);
+  /* a torch hole around the cursor reveals the art beneath */
+  -webkit-mask: radial-gradient(
+    circle 230px at var(--mx, -300px) var(--my, -300px),
+    transparent 16%,
+    #000 70%
+  );
+  mask: radial-gradient(
+    circle 230px at var(--mx, -300px) var(--my, -300px),
+    transparent 16%,
+    #000 70%
+  );
+}
+/* warm glow that follows the cursor and brightens the wall (screen blend) */
+.artwall-spot {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle 240px at var(--mx, -300px) var(--my, -300px),
+    color-mix(in oklab, var(--color-gold) 26%, transparent),
+    color-mix(in oklab, var(--color-orange) 12%, transparent) 45%,
+    transparent 70%
+  );
+  mix-blend-mode: screen;
+  opacity: 0.85;
+}
+@keyframes wallDrift {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5%); }
+}
+
+/* ───────────── wizard-staff cursor ───────────── */
+@media (hover: hover) and (pointer: fine) {
+  body { cursor: none; }
+  textarea, input, [contenteditable="true"] { cursor: text; }
+}
+.wiz-cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 60;
+  pointer-events: none;
+  transform: translate(var(--mx, -300px), var(--my, -300px));
+  will-change: transform;
+}
+@media (hover: none) {
+  .wiz-cursor { display: none; }
+}
+.wiz-dot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, #ffffff, #ffc21e 55%, #ff7a18 100%);
+  box-shadow: 0 0 10px 2px color-mix(in oklab, var(--color-orange) 80%, transparent);
+}
+.wiz-glow2 {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in oklab, var(--color-orange) 42%, transparent), transparent 70%);
+  animation: orbPulse 1.9s ease-in-out infinite;
+}
+@keyframes orbPulse {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.18); }
+}
+
+/* visible keyboard focus (the system cursor is hidden on desktop) */
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: none;
+  border-radius: 8px;
+  box-shadow: 0 0 0 2px var(--color-night), 0 0 0 3px color-mix(in oklab, var(--color-orange) 75%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer, .spin-slow, .wiz-float,
+  .bgfx-prism, .artwall-grid, .wiz-glow2 { animation: none !important; }
 }

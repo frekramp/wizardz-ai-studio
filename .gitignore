@@ -20,9 +20,16 @@
 # production
 /build
 
+# cloudflare / opennext build output
+/.open-next/
+/.wrangler/
+
 # misc
 .DS_Store
 *.pem
+
+# heavy regenerable sample media (GIF/MP4 previews) — keep the repo light
+/public/gifs/
 
 # debug
 npm-debug.log*
@@ -32,6 +39,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# wrangler/OpenNext local preview secrets (not matched by .env*)
+.dev.vars
+.dev.vars.*
 
 # vercel
 .vercel
