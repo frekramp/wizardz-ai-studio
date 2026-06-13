@@ -15,17 +15,19 @@ npx wrangler login
 **2. Set your secrets** (these are NEVER committed — they live in Cloudflare):
 ```bash
 npx wrangler secret put FAL_KEY            # your fal.ai key
-npx wrangler secret put FAL_LORA_URL       # the trained Wizardz LoRA weights URL (current: v12)
-npx wrangler secret put FAL_STYLE_REF_URL  # banner key-art on fal.storage (Kontext anchor / fallback)
-npx wrangler secret put OPENAI_API_KEY     # powers the no-neck judge gate (lib/openai.ts neckClean)
+npx wrangler secret put FAL_MASTER_URL     # PRIMARY engine — canonical master on fal.storage (the locked look)
+npx wrangler secret put FAL_STYLE_REF_URL  # banner key-art on fal.storage (Kontext anchor fallback)
+npx wrangler secret put FAL_LORA_URL       # trained Wizardz LoRA (fallback if master unset)
 npx wrangler secret put AUTH_SECRET        # REQUIRED for the holder gate — any long random string
 npx wrangler secret put ORDISCAN_API_KEY   # free key from ordiscan.com — powers ownership checks
 # optional:
+npx wrangler secret put OPENAI_API_KEY     # only for the legacy neck-judge / gpt-image-2 HD path
 npx wrangler secret put FAL_LORA_SCALE     # e.g. 1
 ```
-> ⚠️ **`AUTH_SECRET` is required in production** (else holder sessions sign with a random per-restart
-> key and keep dropping). **`OPENAI_API_KEY`** gates every image through the neck judge — without it
-> the judge fails *open* (necks can slip through), so set it for the quality guarantee.
+> **Engine:** with `FAL_MASTER_URL` set, the studio recolors/scene-swaps the user-approved canonical
+> master via Kontext — output is locked to the exact look (no necks), so the OpenAI neck-judge is no
+> longer on the hot path. ⚠️ **`AUTH_SECRET` is required in production** (else holder sessions sign
+> with a random per-restart key and keep dropping).
 
 **3. Create the KV namespace** (durable quota / rate-limit / history — the cap is bypassable without it):
 ```bash
@@ -63,8 +65,9 @@ use Pro for a public commercial launch.)
 | Key | Required | What |
 |---|---|---|
 | `FAL_KEY` | ✅ | fal.ai API key (server-side only) |
-| `FAL_LORA_URL` | ✅ | trained Wizardz LoRA weights URL (current: **v12**) |
-| `FAL_STYLE_REF_URL` | ✅ | banner key-art on fal.storage — Kontext anchor + LoRA fallback |
+| `FAL_MASTER_URL` | ✅ | **PRIMARY engine** — canonical master on fal.storage; recolored/scene-swapped per request (the locked look) |
+| `FAL_STYLE_REF_URL` | rec. | banner key-art on fal.storage — Kontext anchor fallback |
+| `FAL_LORA_URL` | rec. | trained Wizardz LoRA — fallback if master unset |
 | `OPENAI_API_KEY` | ✅ (for gate) | gpt-5-mini neck judge on every image (fails open if unset) |
 | `AUTH_SECRET` | ✅ (for gate) | long random string — signs holder sessions (else forgeable/non-persistent) |
 | `ORDISCAN_API_KEY` | for gate | free key from [ordiscan.com](https://ordiscan.com) — on-chain ownership lookup |
