@@ -36,6 +36,10 @@
 /public/necktest-v3/
 /public/neutral/
 /public/neutral-test/
+/public/guidance-test/
+/public/v4-test/
+/public/v5-test/
+/public/chips-test/
 
 # debug
 npm-debug.log*

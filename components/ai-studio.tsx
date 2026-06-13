@@ -74,9 +74,9 @@ const LOADING_PHRASES = [
 const CHIPS: Record<Mode, string[]> = {
   image: [
     "a wise wizard with a glowing staff",
-    "cosmic sorcerer in a galaxy robe",
+    "floating in a starry galaxy",
     "potion-brewing trickster wizard",
-    "fire mage under a blood moon",
+    "casting a fireball under a blood moon",
   ],
   gif: [
     "wizard casting a fire spell, looping",
@@ -445,8 +445,8 @@ export function AiStudio() {
         </div>
       </div>
 
-      {/* preview canvas */}
-      <div className="relative mt-5 grid aspect-[16/11] w-full place-items-center overflow-hidden rounded-[1.4rem] border border-line/70 bg-night/85">
+      {/* preview canvas — square to match the 1:1 renders so the full image shows uncropped */}
+      <div className="relative mt-5 grid aspect-square w-full place-items-center overflow-hidden rounded-[1.4rem] border border-line/70 bg-night/85">
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.05]"
           style={{
