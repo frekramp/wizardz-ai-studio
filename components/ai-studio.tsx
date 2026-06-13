@@ -520,7 +520,7 @@ export function AiStudio() {
                         loop
                         muted
                         playsInline
-                        className="size-full object-cover"
+                        className="size-full object-contain"
                       />
                     ) : result.urls.length > 1 ? (
                       <div className="grid size-full grid-cols-2 gap-1">
@@ -540,7 +540,7 @@ export function AiStudio() {
                       </div>
                     ) : (
                       /* eslint-disable-next-line @next/next/no-img-element */
-                      <img src={result.urls[0]} alt="Your wizard" className="size-full object-cover" />
+                      <img src={result.urls[0]} alt="Your wizard" className="size-full object-contain" />
                     )
                   ) : (
                     <WizardArt className="size-full" seed={seed} />

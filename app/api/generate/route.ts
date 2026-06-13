@@ -29,10 +29,6 @@ import { clientIp, usageKey } from "@/lib/request";
 
 export const runtime = "nodejs";
 
-// One tap over-generates this many on-brand variants for the holder to pick the best from
-// (1 quota credit per tap, NOT per variant). The quality "gate" is: generate several, pick one.
-const VARIANTS = 4;
-
 const MOTION: Record<string, string> = {
   Float: "gently floats and bobs in place, robe and cloak swaying softly",
   Bounce: "bounces up and down with playful, springy energy",
@@ -145,7 +141,7 @@ export async function POST(req: Request) {
   const holder = !!session?.holder;
   const idKey = usageKey(session, ip);
   const genMode: GenMode = rawMode === "gif" ? "gif" : "image";
-  const variants = genMode === "gif" ? 1 : holder ? VARIANTS : 2; // holders 4, free 2 (cost control)
+  const variants = 1; // one focused result per tap (user preference) — also the cheapest path
   const limits = limitsFor(holder);
   // Reserve the credit before the fal call. Durable + cross-isolate via KV (lib/kv.ts); the KV
   // read-modify-write isn't perfectly atomic across simultaneous requests — acceptable for a daily
