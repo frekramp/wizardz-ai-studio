@@ -59,6 +59,40 @@ export async function neckClean(imageUrl: string): Promise<boolean> {
   }
 }
 
+// Best-of-N quality picker. Given several variant URLs of the same generation, ask the vision model
+// to choose the SINGLE cleanest/most coherent one — no floating disconnected blobs, glitches,
+// malformed hands, or stuck-on artifacts — so the user gets one polished image instead of a raw
+// dice-roll. Fast (one gpt-4.1-mini call). Falls back to the first URL if the API is unavailable.
+export async function pickBest(urls: string[]): Promise<string> {
+  if (urls.length <= 1 || !OPENAI_ENABLED) return urls[0];
+  try {
+    const r = await client().chat.completions.create({
+      model: "gpt-4.1-mini",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text:
+                `${urls.length} variations of the same cartoon wizard follow, numbered 1 to ${urls.length}. ` +
+                "Pick the SINGLE best one: cleanest and most visually coherent, correct simple anatomy, and " +
+                "with NO floating disconnected objects, glowing blobs stuck in mid-air, glitches, smears, " +
+                "malformed hands, or awkward artifacts. Reply with ONLY the number.",
+            },
+            ...urls.map((url) => ({ type: "image_url" as const, image_url: { url } })),
+          ],
+        },
+      ],
+    });
+    const m = (r.choices[0].message.content ?? "").match(/\d+/);
+    const idx = m ? parseInt(m[0], 10) - 1 : 0;
+    return urls[idx] ?? urls[0];
+  } catch {
+    return urls[0];
+  }
+}
+
 // Generate `n` on-brand wizard variants with gpt-image-2, conditioned on the banner.
 // `prompt` should already be the on-brand prompt (buildBannerPrompt from lib/fal.ts).
 //

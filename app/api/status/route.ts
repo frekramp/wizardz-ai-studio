@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import { cookies } from "next/headers";
 import { extractOutput, vetVariants } from "@/lib/fal";
+import { pickBest } from "@/lib/openai";
 import { readSession, verifyClaim } from "@/lib/session";
 import { clientIp, usageKey } from "@/lib/request";
 
@@ -38,8 +39,13 @@ export async function GET(req: Request) {
         { status: 502 },
       );
     }
-    // Quality gate: filter gross-failure tiles out of the variant set before the holder sees them.
-    const urls = output.kind === "image" ? await vetVariants(output.urls) : output.urls;
+    // Quality gate: filter gross-failure tiles, then auto-pick the single cleanest (best-of-N) so
+    // the user gets one polished image with no floating-blob / glitch artifacts.
+    let urls = output.urls;
+    if (output.kind === "image") {
+      const vetted = await vetVariants(output.urls);
+      urls = vetted.length > 1 ? [await pickBest(vetted)] : vetted;
+    }
     return NextResponse.json({ status: "COMPLETED", urls, kind: output.kind });
   } catch (e) {
     return NextResponse.json(

@@ -20,7 +20,7 @@ import {
   hoodFix,
   LORA_URL,
 } from "@/lib/fal";
-import { OPENAI_ENABLED, openaiWizardImages } from "@/lib/openai";
+import { OPENAI_ENABLED, openaiWizardImages, pickBest } from "@/lib/openai";
 import { rateLimit } from "@/lib/ratelimit";
 import { readSession, makeClaim } from "@/lib/session";
 import { getUsage, tryReserve, refund, limitsFor, clientLimits, type GenMode } from "@/lib/quota";
@@ -141,7 +141,9 @@ export async function POST(req: Request) {
   const holder = !!session?.holder;
   const idKey = usageKey(session, ip);
   const genMode: GenMode = rawMode === "gif" ? "gif" : "image";
-  const variants = 1; // one focused result per tap (user preference) — also the cheapest path
+  // Generate a few internally, then auto-pick the single cleanest (lib/openai pickBest) so the user
+  // sees ONE polished image without dice-roll artifacts. GIFs stay at 1 (animation cost).
+  const variants = genMode === "gif" ? 1 : 3;
   const limits = limitsFor(holder);
   // Reserve the credit before the fal call. Durable + cross-isolate via KV (lib/kv.ts); the KV
   // read-modify-write isn't perfectly atomic across simultaneous requests — acceptable for a daily
@@ -233,7 +235,8 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Generation failed." }, { status: 502 });
       }
       const fixed = await hoodFix(out.urls);
-      const urls = await vetVariants(fixed);
+      const vetted = await vetVariants(fixed);
+      const urls = vetted.length > 1 ? [await pickBest(vetted)] : vetted; // best-of-N → one image
       return NextResponse.json({
         urls,
         kind: "image",
