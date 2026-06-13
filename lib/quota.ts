@@ -44,7 +44,7 @@ export function limitsFor(holder: boolean): { image: number; gif: number } {
   if (holder) return { image: Infinity, gif: 10 };
   // Local dev: lift the free cap so it never interrupts testing. Production stays 3/day.
   if (process.env.NODE_ENV !== "production") return { image: Infinity, gif: 50 };
-  return { image: 3, gif: 1 };
+  return { image: 10, gif: 1 };
 }
 
 export async function getUsage(key: string): Promise<{ image: number; gif: number }> {

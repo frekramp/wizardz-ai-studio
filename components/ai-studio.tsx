@@ -127,7 +127,7 @@ export function AiStudio() {
   const [notice, setNotice] = useState<string | null>(null);
   const [converting, setConverting] = useState(false);
   const [usage, setUsage] = useState<{ image: number; gif: number }>({ image: 0, gif: 0 });
-  const [limits, setLimits] = useState<{ image: number | null; gif: number }>({ image: 3, gif: 1 });
+  const [limits, setLimits] = useState<{ image: number | null; gif: number }>({ image: 10, gif: 1 });
   const [resultMode, setResultMode] = useState<Mode>("image");
   const [motionKind, setMotionKind] = useState(0);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -192,7 +192,7 @@ export function AiStudio() {
          
         setUsage(u.usage ?? { image: 0, gif: 0 });
          
-        setLimits(u.limits ?? { image: 3, gif: 1 });
+        setLimits(u.limits ?? { image: 10, gif: 1 });
       } catch {
         /* ignore */
       }

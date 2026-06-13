@@ -155,7 +155,7 @@ export async function POST(req: Request) {
       ? `You've used all ${limits.gif} GIFs for today — resets tomorrow.`
       : genMode === "gif"
         ? "That's your free GIF for today. Own a Wizardz to make 10 a day."
-        : "You've used your 3 free generations for today. Own a Wizardz for unlimited.";
+        : "You've used your 10 free generations for today. Own a Wizardz for unlimited.";
     return NextResponse.json({ error: msg, capped: true }, { status: 402 });
   }
 
