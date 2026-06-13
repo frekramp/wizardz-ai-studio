@@ -212,24 +212,22 @@ export function bannerRequest(prompt: string, aspect: string | undefined, count:
 // Returns null if no master is configured (caller falls back to the LoRA / banner path).
 export function masterRequest(prompt: string, aspect: string | undefined, count: number) {
   if (!MASTER_URL) return null;
-  const req = prompt.trim() || "the same wizard on a simple plain background";
-  // Identity is HARD-LOCKED (esp. the no-neck hood geometry + robe shape), but pose / props / scene
-  // are FREE so the request actually renders. Verified on a batch (surfboard, spell-cast, broom,
-  // cross-legged): neck + robe held in every one; only the held orb is "sticky" on prop-swap prompts.
+  const req = prompt.trim() || "the same wizard, simple plain background";
+  // Identity HARD-LOCKED (no-neck hood geometry + robe/eyes/mitts/style); pose, props, scene FREE so
+  // the request actually renders. The base is the NEUTRAL empty-handed master (no orb to cling to),
+  // so even descriptive prompts ("potion-brewing wizard") render the described content — verified on
+  // potion→cauldron, staff→staff, surfboard→surfing, GM→coffee, all neck-clean.
   const p =
-    "Transform this exact wizard into a new illustration that clearly depicts the request below, " +
-    "while keeping its IDENTITY perfectly intact. " +
-    "KEEP IDENTICAL — do NOT change: the dark featureless face with two large glowing white oval " +
-    "eyes; the hood wrapping snugly around the face and framing it on EVERY side INCLUDING directly " +
-    "under the chin, so NO neck, throat or skin is ever visible below the face; the smooth black " +
-    "mitten gloves; the simple one-piece A-line hooded robe with a curled pointed hood tip and smooth " +
-    "sides (no cape, no side flaps); and the glossy cel-shaded cartoon art style with bold clean " +
-    "outlines, vibrant colours and soft cinematic lighting. " +
-    "YOU MAY freely change to fulfil the request: the wizard's pose and body position, what its hands " +
-    "hold or do, any props or objects, and the entire background and scene. If the request implies " +
-    "the hands are holding or doing something other than a glowing orb, the orb is gone and replaced " +
-    "accordingly. The requested action and setting must be obviously and clearly visible. " +
-    `Request: ${req}`;
+    "Transform this exact wizard into a brand-new illustration that VIVIDLY depicts the request below. " +
+    "Actually render the described subject, action, scene, clothing and props — not just a recolour. " +
+    "KEEP IDENTICAL (the character's identity): the dark featureless face with two large glowing white " +
+    "oval eyes; the hood wrapping snugly around the face and framing it on EVERY side INCLUDING under " +
+    "the chin so NO neck, throat or skin shows below the face; the smooth black mitten gloves; the " +
+    "simple one-piece A-line hooded-robe SHAPE with a curled pointed hood tip and smooth sides (no " +
+    "cape, no flaps); and the glossy cel-shaded cartoon style with bold clean outlines and soft " +
+    "lighting. CHANGE FREELY to match the request: the pose and body position, the entire background " +
+    "and scene, any props or objects the hands hold or use, and the robe's colour and pattern. The " +
+    `requested subject and setting must be obvious at a glance. Request: ${req}`;
   return { model: MODELS.imageEdit, input: kontextInput(MASTER_URL, p, aspect, count) };
 }
 

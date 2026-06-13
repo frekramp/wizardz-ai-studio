@@ -227,14 +227,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Couldn't resolve that wizard." }, { status: 400 });
     }
 
-    // TEMP DIAGNOSTIC — log exactly what the request built, so we can see whether the browser's
-    // payload differs from a direct API call (remove once the surfboard mismatch is resolved).
-    console.log(
-      `[wizgen] mode=${rawMode} wiz=${wizN} promptLen=${prompt.length} ` +
-        `userPrompt=${JSON.stringify(prompt)} model=${built.model} ` +
-        `enginePrompt=${JSON.stringify(String((built.input as { prompt?: string }).prompt ?? "").slice(0, 120))}`,
-    );
-
     // LoRA generations run SYNCHRONOUSLY so we can apply the guaranteed no-neck hood-fix pass
     // (the Kontext edit that fixed 30/30 dataset images) to every image before the user sees it.
     if (built.model === MODELS.imageLora && rawMode !== "recreate") {
@@ -255,7 +247,6 @@ export async function POST(req: Request) {
     }
 
     const submitted = await fal.queue.submit(built.model, { input: built.input });
-    console.log(`[wizgen] submitted requestId=${submitted.request_id} model=${built.model}`);
     return NextResponse.json({
       requestId: submitted.request_id,
       model: built.model,

@@ -31,6 +31,12 @@
 # heavy regenerable sample media (GIF/MP4 previews) — keep the repo light
 /public/gifs/
 
+# throwaway engine-test renders (neck/prompt experiments) — regenerable, not shipped
+/public/necktest-v2/
+/public/necktest-v3/
+/public/neutral/
+/public/neutral-test/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
