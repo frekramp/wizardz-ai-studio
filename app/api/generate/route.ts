@@ -18,6 +18,7 @@ import {
   extractOutput,
   vetVariants,
   hoodFix,
+  zoomFill,
   LORA_URL,
 } from "@/lib/fal";
 import { OPENAI_ENABLED, openaiWizardImages, pickBest } from "@/lib/openai";
@@ -236,7 +237,8 @@ export async function POST(req: Request) {
       }
       const fixed = await hoodFix(out.urls);
       const vetted = await vetVariants(fixed);
-      const urls = vetted.length > 1 ? [await pickBest(vetted)] : vetted; // best-of-N → one image
+      const picked = vetted.length > 1 ? [await pickBest(vetted)] : vetted; // best-of-N → one image
+      const urls = await zoomFill(picked); // free center zoom so the wizard fills the frame
       return NextResponse.json({
         urls,
         kind: "image",

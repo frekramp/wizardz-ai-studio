@@ -365,6 +365,42 @@ export async function vetVariants(urls: string[]): Promise<string[]> {
   return good.length ? good : urls;
 }
 
+// Gentle center zoom-crop so the (always-centered) wizard fills more of the frame — fixes the
+// "character too small / too much empty background" look without any extra generation. FREE: just
+// crops to WIZ_ZOOM of each side, re-squares to 1024, and re-hosts on fal.storage. Fail-safe — any
+// error (incl. sharp unavailable) returns the original URL so delivery never breaks. Tune via the
+// WIZ_ZOOM env (smaller = more zoom; 0.85 ≈ 18% larger subject; 1 = off).
+const ZOOM_FRAC = Number(process.env.WIZ_ZOOM ?? "0.85");
+export async function zoomFill(urls: string[]): Promise<string[]> {
+  if (!(ZOOM_FRAC > 0 && ZOOM_FRAC < 0.999)) return urls;
+  try {
+    const sharp = (await import("sharp")).default;
+    return await Promise.all(
+      urls.map(async (url) => {
+        try {
+          const ab = (await fetch(url).then((r) => r.arrayBuffer())) as ArrayBuffer;
+          const input = Buffer.from(new Uint8Array(ab));
+          const meta = await sharp(input).metadata();
+          const W = meta.width ?? 1024;
+          const H = meta.height ?? 1024;
+          const cw = Math.round(W * ZOOM_FRAC);
+          const ch = Math.round(H * ZOOM_FRAC);
+          const out = await sharp(input)
+            .extract({ left: Math.round((W - cw) / 2), top: Math.round((H - ch) / 2), width: cw, height: ch })
+            .resize(1024, 1024)
+            .png()
+            .toBuffer();
+          return await fal.storage.upload(new Blob([new Uint8Array(out)], { type: "image/png" }));
+        } catch {
+          return url; // fail-safe per image
+        }
+      }),
+    );
+  } catch {
+    return urls; // fail-safe (e.g. sharp unavailable) — never block delivery
+  }
+}
+
 export function extractOutput(
   data: unknown,
 ): { urls: string[]; kind: "image" | "video" } | null {
