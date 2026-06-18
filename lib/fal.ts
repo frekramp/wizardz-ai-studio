@@ -58,11 +58,16 @@ export const WIZ_ROBE =
 export const WIZ_HANDS = "neat black rounded mitten gloves, smooth and clean";
 export const WIZ_STYLE =
   "glossy cel-shaded cartoon, bold clean outlines, vibrant saturated colors, rich detailed atmospheric background, soft cinematic lighting";
+// Framing (user-locked): always a COMPLETE full-body figure, never a cropped close-up/bust — so the
+// zoom-crop lands consistently (the orb/coffee scenes otherwise render tight busts).
+export const WIZ_FRAME =
+  "shown as a complete FULL BODY from the top of its pointed hood down to its feet, standing upright " +
+  "and centered, the whole figure visible and filling the frame — NOT a close-up, NOT a cropped bust";
 
 export function buildPrompt(prompt: string, style?: string | null, useLora = false): string {
   const extra = style && STYLE_HINT[style] ? `, ${STYLE_HINT[style]}` : "";
   if (useLora) {
-    return `wzrdz, a single Wizardz wizard, ${prompt.trim()}, the wizard large and prominent in the frame with a full visible body and minimal empty background, ${WIZ_EYES}, ${WIZ_ROBE}, ${WIZ_HANDS}, ${WIZ_STYLE}${extra}`;
+    return `wzrdz, a single Wizardz wizard, ${prompt.trim()}, ${WIZ_FRAME}, ${WIZ_EYES}, ${WIZ_ROBE}, ${WIZ_HANDS}, ${WIZ_STYLE}${extra}`;
   }
   return `${prompt.trim()}. Wizardz character art: ${WIZ_EYES}, ${WIZ_ROBE}, ${WIZ_HANDS}; ${WIZ_STYLE}${extra}`;
 }
@@ -93,8 +98,8 @@ export function buildWizLoraPrompt(
   // character tokens — the LoRA has a strong single-portrait prior, so we also explicitly
   // ask for a full-body action shot to pull props (surfboard, staff, etc.) into frame.
   const subject = s
-    ? `wzrdz, a single Wizardz wizard ${s}, full-body dynamic action shot, the wizard large and prominent in the frame with minimal empty background`
-    : "wzrdz, a single Wizardz wizard, large and prominent in the frame with a full visible body";
+    ? `wzrdz, a single Wizardz wizard ${s}, full-body dynamic action shot, ${WIZ_FRAME}`
+    : `wzrdz, a single Wizardz wizard, ${WIZ_FRAME}`;
   const traits = traitPhrases && traitPhrases.trim() ? `, ${traitPhrases.trim()}` : "";
   return `${subject}${traits}, ${WIZ_EYES}, ${WIZ_ROBE}, ${WIZ_HANDS}, ${WIZ_STYLE}${styleHint}`;
 }
