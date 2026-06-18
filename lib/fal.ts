@@ -53,8 +53,11 @@ export const WIZ_EYES =
   "mouth, no nose and no other facial features at all — only the two glowing eyes";
 export const WIZ_ROBE =
   "one simple plain hooded robe with a curled pointed hood tip, falling straight down as a single " +
-  "smooth one-piece A-line, wide sleeves, completely smooth sides — no cape, no side slits, no " +
-  "wing-like side flaps, no extra fabric panels flaring out at the left or right";
+  "smooth one-piece A-line with neat tidy sleeves of normal length that end cleanly around the wrists " +
+  "(NOT long, baggy, droopy or sagging), completely smooth sides — no cape, no side slits, no " +
+  "wing-like side flaps, no extra fabric panels flaring out at the left or right — and a clean simple " +
+  "rounded hem at the bottom resting neatly at the feet, NOT melting, pooling, puddling or spreading " +
+  "into a wide shapeless blob";
 export const WIZ_HANDS = "neat black rounded mitten gloves, smooth and clean";
 export const WIZ_STYLE =
   "glossy cel-shaded cartoon, bold clean outlines, vibrant saturated colors, rich detailed atmospheric background, soft cinematic lighting";

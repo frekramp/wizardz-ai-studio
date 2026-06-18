@@ -80,8 +80,9 @@ export async function pickBest(urls: string[]): Promise<string> {
                 "eyes and absolutely NO mouth, no nose and no smile; clean simple black mitten hands; and the " +
                 "COMPLETE FULL BODY visible from the top of the hood down to the feet — STRONGLY prefer a full-body " +
                 "figure and reject tight close-ups or cropped busts. Then prefer the cleanest, most coherent one " +
-                "with no floating blobs, glitches, smears, malformed hands, or artifacts. STRONGLY reject any " +
-                "variant that has a mouth. Reply with ONLY the number.",
+                "with no floating blobs, glitches, smears, malformed hands, or artifacts. Also prefer neat " +
+                "sleeves and a clean rounded robe hem; reject droopy/saggy sleeves or a robe that melts/pools " +
+                "into a shapeless blob at the bottom. STRONGLY reject any variant that has a mouth. Reply with ONLY the number.",
             },
             ...urls.map((url) => ({ type: "image_url" as const, image_url: { url } })),
           ],
