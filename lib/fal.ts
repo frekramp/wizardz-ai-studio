@@ -378,7 +378,7 @@ export async function vetVariants(urls: string[]): Promise<string[]> {
 // crops to WIZ_ZOOM of each side, re-squares to 1024, and re-hosts on fal.storage. Fail-safe — any
 // error (incl. sharp unavailable) returns the original URL so delivery never breaks. Tune via the
 // WIZ_ZOOM env (smaller = more zoom; 0.85 ≈ 18% larger subject; 1 = off).
-const ZOOM_FRAC = Number(process.env.WIZ_ZOOM ?? "0.8");
+const ZOOM_FRAC = Number(process.env.WIZ_ZOOM ?? "0.85");
 export async function zoomFill(urls: string[]): Promise<string[]> {
   if (!(ZOOM_FRAC > 0 && ZOOM_FRAC < 0.999)) return urls;
   try {
