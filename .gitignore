@@ -64,3 +64,7 @@ next-env.d.ts
 # v13 LoRA training pipeline (regenerable, heavy) — dataset frames + eval grids
 /scripts/train-data/dataset-v13/
 /scripts/test/eval/
+
+# local-only: archived training artifacts (delete when ready) + kept reference samples
+_trash_archive/
+reference-samples/
