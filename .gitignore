@@ -68,3 +68,6 @@ next-env.d.ts
 # local-only: archived training artifacts (delete when ready) + kept reference samples
 _trash_archive/
 reference-samples/
+
+# generated master candidates (scratch — the winner lands in public/brand/canonical/)
+/scripts/out/
