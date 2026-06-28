@@ -216,6 +216,41 @@ export function bannerRequest(prompt: string, aspect: string | undefined, count:
   return { model: MODELS.imageEdit, input: kontextInput(STYLE_REF_URL, prompt, aspect, count) };
 }
 
+// Robe-colour picker for the master recolour path. A named colour in the prompt (incl. Wizardz cloak
+// trait words like "crimson"/"emerald") is honoured; otherwise a random one from the 9-colour set —
+// so the studio ships varied colours instead of always blue.
+export const ROBE_COLORS: Record<string, string> = {
+  blue: "bright sky-blue",
+  purple: "vivid purple",
+  red: "crimson red",
+  green: "emerald green",
+  gold: "rich golden yellow",
+  orange: "warm orange",
+  teal: "teal",
+  white: "clean white",
+  pink: "bright pink",
+};
+const COLOR_WORDS: Record<string, string> = {
+  blue: "blue", azure: "blue", sky: "blue", sapphire: "blue", cobalt: "blue",
+  purple: "purple", violet: "purple", lavender: "purple", amethyst: "purple",
+  red: "red", crimson: "red", scarlet: "red", ruby: "red",
+  green: "green", emerald: "green", jade: "green", lime: "green",
+  gold: "gold", golden: "gold", yellow: "gold", amber: "gold",
+  orange: "orange", tangerine: "orange",
+  teal: "teal", cyan: "teal", turquoise: "teal", aqua: "teal",
+  white: "white", ivory: "white", snow: "white",
+  pink: "pink", rose: "pink", magenta: "pink", fuchsia: "pink",
+};
+export function pickRobeColor(prompt: string): { key: string; desc: string } {
+  const text = ` ${prompt.toLowerCase()} `;
+  for (const [word, key] of Object.entries(COLOR_WORDS)) {
+    if (new RegExp(`\\b${word}\\b`).test(text)) return { key, desc: ROBE_COLORS[key] };
+  }
+  const keys = Object.keys(ROBE_COLORS);
+  const key = keys[Math.floor(Math.random() * keys.length)];
+  return { key, desc: ROBE_COLORS[key] };
+}
+
 // PRIMARY engine: recolor + scene-swap the user-approved canonical master via Kontext. Output is
 // locked to the exact approved look — only the robe colour and the background change, so the
 // flaky neck/robe-drift of fresh generation can't appear (this is the method the user signed off).
@@ -223,6 +258,7 @@ export function bannerRequest(prompt: string, aspect: string | undefined, count:
 export function masterRequest(prompt: string, aspect: string | undefined, count: number) {
   if (!MASTER_URL) return null;
   const req = prompt.trim() || "the same wizard, simple plain background";
+  const color = pickRobeColor(req); // named colour in the prompt, else random — never forced blue
   // Identity HARD-LOCKED (no-neck hood geometry + robe/eyes/mitts/style); pose, props, scene FREE so
   // the request actually renders. The base is the NEUTRAL empty-handed master (no orb to cling to),
   // so even descriptive prompts ("potion-brewing wizard") render the described content — verified on
@@ -236,7 +272,10 @@ export function masterRequest(prompt: string, aspect: string | undefined, count:
     "simple one-piece A-line hooded-robe SHAPE with a curled pointed hood tip and smooth sides (no " +
     "cape, no flaps); and the glossy cel-shaded cartoon style with bold clean outlines and soft " +
     "lighting. CHANGE FREELY to match the request: the pose and body position, the entire background " +
-    "and scene, any props or objects the hands hold or use, and the robe's colour and pattern. " +
+    "and scene, and any props or objects the hands hold or use. " +
+    `RECOLOR the hood and robe to ${color.desc} — change ONLY the colour of the hood and robe fabric ` +
+    "to this colour; the matte-black face, the glowing white eyes and the solid-black mitten gloves " +
+    "keep their exact colours, and this colour must NOT bleed onto the face, the eyes or the gloves. " +
     "ALWAYS keep the robe a long flowing ONE-PIECE floor-length hooded robe that fully covers the legs " +
     "with its hem reaching the ground, and whose long sleeves fully cover BOTH arms so only the gloved " +
     "hands show — never show any of: pants, trousers, leggings, two separate legs, split robe, robe " +
