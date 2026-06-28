@@ -259,29 +259,27 @@ export function masterRequest(prompt: string, aspect: string | undefined, count:
   if (!MASTER_URL) return null;
   const req = prompt.trim() || "the same wizard, simple plain background";
   const color = pickRobeColor(req); // named colour in the prompt, else random — never forced blue
-  // Identity HARD-LOCKED (no-neck hood geometry + robe/eyes/mitts/style); pose, props, scene FREE so
-  // the request actually renders. The base is the NEUTRAL empty-handed master (no orb to cling to),
-  // so even descriptive prompts ("potion-brewing wizard") render the described content — verified on
-  // potion→cauldron, staff→staff, surfboard→surfing, GM→coffee, all neck-clean.
+  // FOCUS ORDER MATTERS (verified on the 5 real failed cases): LEAD with the two transforms — render
+  // the SETTING as the full background + RE-POSE for the ACTION — then the identity lock as a tight
+  // secondary clause. Burying the scene/action directive behind a long KEEP-IDENTICAL wall made Kontext
+  // cling to the master (standing, plain bg) and ignore it (0/5 action). Leading with it makes scenes +
+  // actions actually render (5/5) while staying on-model + full-body. TIGHT (3.5) keeps the framing; the
+  // compact one-piece-robe rule prevents pants/leg-split (seated/surf poses still split, as accepted).
   const p =
-    "Transform this exact wizard into a brand-new illustration that VIVIDLY depicts the request below. " +
-    "Actually render the described subject, action, scene, clothing and props — not just a recolour. " +
-    "KEEP IDENTICAL (the character's identity): the dark featureless face with two large glowing white " +
-    "oval eyes; the hood wrapping snugly around the face and framing it on EVERY side INCLUDING under " +
-    "the chin so NO neck, throat or skin shows below the face; the smooth black mitten gloves; the " +
-    "simple one-piece A-line hooded-robe SHAPE with a curled pointed hood tip and smooth sides (no " +
-    "cape, no flaps); and the glossy cel-shaded cartoon style with bold clean outlines and soft " +
-    "lighting. CHANGE FREELY to match the request: the pose and body position, the entire background " +
-    "and scene, and any props or objects the hands hold or use. " +
-    `RECOLOR the hood and robe to ${color.desc} — change ONLY the colour of the hood and robe fabric ` +
-    "to this colour; the matte-black face, the glowing white eyes and the solid-black mitten gloves " +
-    "keep their exact colours, and this colour must NOT bleed onto the face, the eyes or the gloves. " +
-    "ALWAYS keep the robe a long flowing ONE-PIECE floor-length hooded robe that fully covers the legs " +
-    "with its hem reaching the ground, and whose long sleeves fully cover BOTH arms so only the gloved " +
-    "hands show — never show any of: pants, trousers, leggings, two separate legs, split robe, robe " +
-    "split, divided robe, bifurcated robe, legs showing, jumpsuit, tight clothing, bare arm, exposed " +
-    "arm, rolled-up sleeve, skin, deformed robe, robe turning into pants. " +
-    "The requested subject and setting must be obvious at a glance. " +
+    "Re-stage this exact wizard character into a brand-new scene that depicts the request. " +
+    "DO THESE TWO THINGS FIRST — they matter most: " +
+    "(1) RENDER the described place and setting as the full, detailed background that fills the entire " +
+    "frame behind the wizard; (2) RE-POSE the wizard so it is actively performing the described action " +
+    "in the foreground, its arms and gloved hands holding or using whatever the action needs. " +
+    "While doing that, keep the CHARACTER on-model: a matte-black featureless face with two large " +
+    "glowing white oval eyes; the hood wrapped snug under the chin so no neck or skin shows; smooth " +
+    "black mitten gloves; a single one-piece floor-length hooded robe (hem to the ground, long sleeves " +
+    "over both arms — never pants, a split robe, two legs, bare arms or skin); the glossy cel-shaded " +
+    "cartoon style; and the COMPLETE full body visible from hood-tip to feet, centered and never " +
+    "cropped to a bust. " +
+    `Recolor the hood and robe fabric to ${color.desc} — only the fabric; the black face, white eyes ` +
+    "and black gloves keep their colours and the colour must not bleed onto them. " +
+    "Make the requested action and setting unmistakable at a glance. " +
     `Request: ${req}`;
   // TIGHT faithfulness (guidance 3.5) — locked in via the faithfulness tuning grid: follows the
   // prompt's pose/scene while staying on-model. The robe rule in `p` above prevents pants/leg-split.
