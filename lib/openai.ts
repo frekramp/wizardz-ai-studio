@@ -59,6 +59,32 @@ export async function neckClean(imageUrl: string): Promise<boolean> {
   }
 }
 
+// Hands gate: do the gloves read as clean Mickey-style mittens (≤4 stubby digits), not claws / human
+// hands / blobs? Majority-of-3 gpt-4.1-mini, fails open. Used to CONDITIONALLY trigger the hand-fix
+// pass on the master path, so good action-hands (gripping a cup/phone) aren't needlessly re-edited.
+const HANDS_Q =
+  "Look at the wizard's hands. Are they clean simple solid-black cartoon MITTEN gloves with at most four " +
+  "stubby digits (three fingers + a thumb) — NOT long splayed fingers, NOT claws, NOT human five-finger " +
+  "hands, not melted/malformed/blobby? Answer KEEP if they are clean mittens, DROP if not. One word.";
+export async function handsClean(imageUrl: string): Promise<boolean> {
+  if (!OPENAI_ENABLED) return true;
+  try {
+    const one = async () => {
+      const r = await client().chat.completions.create({
+        model: "gpt-4.1-mini",
+        messages: [
+          { role: "user", content: [{ type: "text", text: HANDS_Q }, { type: "image_url", image_url: { url: imageUrl } }] },
+        ],
+      });
+      return (r.choices[0].message.content ?? "").trim().toUpperCase().startsWith("KEEP");
+    };
+    const votes = await Promise.all([one(), one(), one()]);
+    return votes.filter(Boolean).length >= 2;
+  } catch {
+    return true;
+  }
+}
+
 // Best-of-N quality picker. Given several variant URLs of the same generation, ask the vision model
 // to choose the SINGLE cleanest/most coherent one — no floating disconnected blobs, glitches,
 // malformed hands, or stuck-on artifacts — so the user gets one polished image instead of a raw

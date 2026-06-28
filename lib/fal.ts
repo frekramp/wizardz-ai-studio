@@ -194,11 +194,12 @@ export function kontextInput(
   prompt: string,
   aspect: string | undefined,
   count: number,
+  guidance = 3.5,
 ): Record<string, unknown> {
   const input: Record<string, unknown> = {
     image_url: imageUrl,
     prompt,
-    guidance_scale: 3.5,
+    guidance_scale: guidance,
     num_images: clampCount(count),
     // permissive: we're turning photos of people into cartoon wizards, not the people themselves
     safety_tolerance: "5",
@@ -235,9 +236,17 @@ export function masterRequest(prompt: string, aspect: string | undefined, count:
     "simple one-piece A-line hooded-robe SHAPE with a curled pointed hood tip and smooth sides (no " +
     "cape, no flaps); and the glossy cel-shaded cartoon style with bold clean outlines and soft " +
     "lighting. CHANGE FREELY to match the request: the pose and body position, the entire background " +
-    "and scene, any props or objects the hands hold or use, and the robe's colour and pattern. The " +
-    `requested subject and setting must be obvious at a glance. Request: ${req}`;
-  return { model: MODELS.imageEdit, input: kontextInput(MASTER_URL, p, aspect, count) };
+    "and scene, any props or objects the hands hold or use, and the robe's colour and pattern. " +
+    "ALWAYS keep the robe a long flowing ONE-PIECE floor-length hooded robe that fully covers the legs " +
+    "with its hem reaching the ground, and whose long sleeves fully cover BOTH arms so only the gloved " +
+    "hands show — never show any of: pants, trousers, leggings, two separate legs, split robe, robe " +
+    "split, divided robe, bifurcated robe, legs showing, jumpsuit, tight clothing, bare arm, exposed " +
+    "arm, rolled-up sleeve, skin, deformed robe, robe turning into pants. " +
+    "The requested subject and setting must be obvious at a glance. " +
+    `Request: ${req}`;
+  // TIGHT faithfulness (guidance 3.5) — locked in via the faithfulness tuning grid: follows the
+  // prompt's pose/scene while staying on-model. The robe rule in `p` above prevents pants/leg-split.
+  return { model: MODELS.imageEdit, input: kontextInput(MASTER_URL, p, aspect, count, 3.5) };
 }
 
 // DESIGN ENFORCEMENT — the guarantee layer on every generated image, closing the two
@@ -343,6 +352,35 @@ export async function hoodFix(urls: string[]): Promise<string[]> {
   if (clean.length) return clean.map((r) => r.url);
   results.sort((a, b) => a.ratio - b.ratio);
   return [results[0].url];
+}
+
+// Hand-fix delivery pass (mirrors hoodFix, for the mitten gloves). For each url: judge the hands; if
+// they aren't clean Mickey-mitts, run ONE Kontext edit to restore them (keeping held objects + pose).
+// Conditional so good action-hands aren't needlessly re-edited. Fails open to the original url.
+const HAND_ENFORCE_PROMPT =
+  "Edit ONLY the character's hands. Replace each hand with a clean simple solid-black rounded cartoon " +
+  "MITTEN glove — exactly three plump rounded fingers plus a thumb (classic Mickey-Mouse-glove style), " +
+  "with two small oval stitch lines on the back and a rounded cuff; no long fingers, no claws, no human " +
+  "five-finger hands, no extra digits, no melting or blobs. Keep everything else identical: same robe " +
+  "colour, same eyes, same hood, same pose, the same objects the hands hold, same background, same style.";
+async function handEnforceOnce(url: string): Promise<string> {
+  const r = await fal.subscribe(MODELS.imageEdit, {
+    input: { image_url: url, prompt: HAND_ENFORCE_PROMPT, num_images: 1, guidance_scale: 4, safety_tolerance: "5" },
+    logs: false,
+  });
+  return (r.data as { images?: Array<{ url?: string }> })?.images?.[0]?.url || url;
+}
+export async function handFix(urls: string[]): Promise<string[]> {
+  const { handsClean } = await import("./openai");
+  return Promise.all(
+    urls.map(async (url) => {
+      try {
+        return (await handsClean(url)) ? url : await handEnforceOnce(url);
+      } catch {
+        return url;
+      }
+    }),
+  );
 }
 
 type FalData = {

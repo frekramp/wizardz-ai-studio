@@ -18,8 +18,10 @@ import {
   extractOutput,
   vetVariants,
   hoodFix,
+  handFix,
   zoomFill,
   LORA_URL,
+  MASTER_URL,
 } from "@/lib/fal";
 import { OPENAI_ENABLED, openaiWizardImages, pickBest } from "@/lib/openai";
 import { rateLimit } from "@/lib/ratelimit";
@@ -224,6 +226,32 @@ export async function POST(req: Request) {
     if (!built) {
       await refund(idKey, "image", 1);
       return NextResponse.json({ error: "Couldn't resolve that wizard." }, { status: 400 });
+    }
+
+    // Master recolor path runs SYNCHRONOUSLY so we can apply the neck + hand fix AT THE SOURCE: the
+    // loosened prompt-following can drift on action poses, so best-of-N → conditional neck-fix
+    // (hoodFix) → conditional hand-fix (handFix). Recreate keeps the async queue path further down.
+    const isMaster =
+      !!MASTER_URL &&
+      built.model === MODELS.imageEdit &&
+      (built.input as { image_url?: string }).image_url === MASTER_URL;
+    if (isMaster && rawMode !== "recreate") {
+      const res = await fal.subscribe(built.model, { input: built.input });
+      const out = extractOutput(res.data);
+      if (!out?.urls.length) {
+        await refund(idKey, "image", 1);
+        return NextResponse.json({ error: "Generation failed." }, { status: 502 });
+      }
+      const vetted = await vetVariants(out.urls);
+      const picked = vetted.length > 1 ? [await pickBest(vetted)] : vetted; // best-of-N → one image
+      const necked = await hoodFix(picked); // neck-fix at the source (conditional)
+      const urls = await handFix(necked); // hand-fix at the source (conditional)
+      return NextResponse.json({
+        urls,
+        kind: "image",
+        usage: await getUsage(idKey),
+        limits: clientLimits(holder),
+      });
     }
 
     // LoRA generations run SYNCHRONOUSLY so we can apply the guaranteed no-neck hood-fix pass
