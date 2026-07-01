@@ -8,12 +8,6 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // Native addon (meme-caption font rendering) — keep external so Turbopack doesn't bundle the .node
-  // binary, and force-include the Linux binary so Vercel traces it into the /api/generate function.
-  serverExternalPackages: ["@resvg/resvg-js"],
-  outputFileTracingIncludes: {
-    "/api/generate": ["./node_modules/@resvg/resvg-js-linux-x64-gnu/**"],
-  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

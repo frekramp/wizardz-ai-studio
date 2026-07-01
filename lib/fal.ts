@@ -1,4 +1,6 @@
 import { fal } from "@fal-ai/client";
+import { parse as parseFont } from "opentype.js";
+import type { Font as OpenTypeFont } from "opentype.js";
 
 // Configure the singleton once (server-side only — this module is imported by route handlers).
 if (process.env.FAL_KEY) {
@@ -500,30 +502,20 @@ export async function zoomFill(urls: string[]): Promise<string[]> {
 // ── MEME caption overlay ───────────────────────────────────────────────────────────────────────
 // Bake the meme caption onto the finished PNG as a REAL text layer — the image model misspells words,
 // so we never let it draw text. Heavy uppercase white glyphs with a thick black outline, auto-sized to
-// the image width (wraps to two balanced lines when long), pinned top or bottom. The text is rendered
-// with @resvg/resvg-js using the bundled ANTON font (loaded as a buffer, not the system fontconfig) so
-// output is byte-identical on macOS + Vercel; sharp then composites the transparent text layer onto the
-// image. Fail-safe: any error returns the original url so delivery never breaks.
-function xmlEscape(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
-const CAPTION_FONT = "Anton"; // the bundled display font resvg loads from FONT_URL
-
-// Anton TTF on fal.storage (uploaded from assets/fonts/Anton-Regular.ttf). Fetched once and cached for
-// the life of the (warm) function; resvg needs the raw font bytes.
+// the image width (wraps to two balanced lines when long), pinned top or bottom. opentype.js converts
+// the text to VECTOR GLYPH PATHS from the bundled ANTON font — the SVG carries no font dependency, so
+// sharp renders it identically on macOS + Vercel (pure JS, no native binary / fontconfig). Fail-safe:
+// any error returns the original url so delivery never breaks.
+//
+// Anton TTF on fal.storage (uploaded from assets/fonts/Anton-Regular.ttf via scripts/upload-eyes.mjs's
+// sibling). Fetched + parsed once and cached for the life of the (warm) function.
 const FONT_URL = "https://v3b.fal.media/files/b/0aa07786/hPfbgydZs-i12rMe5LCVD_1782885180593.ttf";
-let captionFontPromise: Promise<Buffer> | null = null;
-function captionFont(): Promise<Buffer> {
+let captionFontPromise: Promise<OpenTypeFont> | null = null;
+function captionFont(): Promise<OpenTypeFont> {
   if (!captionFontPromise) {
     captionFontPromise = fetch(FONT_URL)
       .then((r) => r.arrayBuffer())
-      .then((ab) => Buffer.from(new Uint8Array(ab)))
+      .then((ab) => parseFont(ab))
       .catch((e) => {
         captionFontPromise = null; // let the next call retry
         throw e;
@@ -532,14 +524,15 @@ function captionFont(): Promise<Buffer> {
   return captionFontPromise;
 }
 
-function memeCaptionSvg(text: string, W: number, H: number, position: "top" | "bottom"): string {
+function memeCaptionSvg(font: OpenTypeFont, text: string, W: number, H: number, position: "top" | "bottom"): string {
   const up = text.toUpperCase();
   const budget = W * 0.9; // horizontal text budget
-  const CHAR_W = 0.74; // avg glyph width / font-size for a wide heavy caps face (keeps us from clipping)
   const maxFont = Math.round(H * 0.16);
-  const fit = (line: string) => budget / Math.max(1, line.length * CHAR_W);
+  const advAt1 = (line: string) => font.getAdvanceWidth(line, 1); // exact width per 1px of font size
+  const fit = (line: string) => budget / Math.max(1e-6, advAt1(line));
 
-  // One line first; wrap to two balanced lines only if that lets the text be bigger.
+  // One line first; wrap to two balanced lines only if that lets the text be bigger (compare by the
+  // WIDER of the two lines' exact advance widths).
   let lines = [up];
   let fontSize = Math.min(maxFont, fit(up));
   if (fontSize < maxFont * 0.62 && up.includes(" ")) {
@@ -548,7 +541,7 @@ function memeCaptionSvg(text: string, W: number, H: number, position: "top" | "b
     for (let i = 1; i < words.length; i++) {
       const a = words.slice(0, i).join(" ");
       const b = words.slice(i).join(" ");
-      const fs = Math.min(maxFont, fit(a.length >= b.length ? a : b));
+      const fs = Math.min(maxFont, budget / Math.max(advAt1(a), advAt1(b)));
       if (!best || fs > best.fs) best = { lines: [a, b], fs };
     }
     if (best && best.fs > fontSize) {
@@ -558,21 +551,21 @@ function memeCaptionSvg(text: string, W: number, H: number, position: "top" | "b
   }
   fontSize = Math.round(Math.max(fontSize, maxFont * 0.34));
 
-  const lineH = fontSize * 1.05;
-  const stroke = Math.max(2, Math.round(fontSize * 0.13));
+  const lineH = fontSize * 1.12;
+  const stroke = Math.max(2, Math.round(fontSize * 0.12));
   const pad = Math.round(H * 0.05);
   const n = lines.length;
   const firstBaseline = position === "top" ? pad + fontSize : H - pad - (n - 1) * lineH;
-  const texts = lines
-    .map(
-      (ln, i) =>
-        `<text x="${W / 2}" y="${Math.round(firstBaseline + i * lineH)}" text-anchor="middle" ` +
-        `font-family='${CAPTION_FONT}' font-size="${fontSize}" font-weight="900" fill="#ffffff" ` +
-        `stroke="#000000" stroke-width="${stroke}" paint-order="stroke" stroke-linejoin="round">` +
-        `${xmlEscape(ln)}</text>`,
-    )
+  const paths = lines
+    .map((ln, i) => {
+      const w = font.getAdvanceWidth(ln, fontSize);
+      const x = (W - w) / 2; // exact horizontal centre
+      const y = Math.round(firstBaseline + i * lineH);
+      const d = font.getPath(ln, x, y, fontSize).toPathData(2);
+      return `<path d="${d}" fill="#ffffff" stroke="#000000" stroke-width="${stroke}" paint-order="stroke" stroke-linejoin="round"/>`;
+    })
     .join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">${texts}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">${paths}</svg>`;
 }
 
 // Overlay one caption onto one image; returns a new fal.media URL (or the original on any failure).
@@ -585,23 +578,15 @@ export async function captionImage(
   if (!text) return url;
   try {
     const sharp = (await import("sharp")).default;
-    const { Resvg } = await import("@resvg/resvg-js");
     const font = await captionFont();
     const ab = (await fetch(url).then((r) => r.arrayBuffer())) as ArrayBuffer;
     const input = Buffer.from(new Uint8Array(ab));
     const meta = await sharp(input).metadata();
     const W = meta.width ?? 1024;
     const H = meta.height ?? 1024;
-    const svg = memeCaptionSvg(text, W, H, position);
-    // Render the transparent text layer with Anton (from the buffer — deterministic across hosts).
-    // resvg-js 2.6.2 accepts `fontBuffers` at runtime but its types omit it, so assert the option shape.
-    const resvgOptions = {
-      font: { fontBuffers: [font], defaultFontFamily: CAPTION_FONT, loadSystemFonts: false },
-      background: "rgba(0,0,0,0)",
-    } as unknown as ConstructorParameters<typeof Resvg>[1];
-    const textPng = new Resvg(svg, resvgOptions).render().asPng();
+    const svg = memeCaptionSvg(font, text, W, H, position);
     const out = await sharp(input)
-      .composite([{ input: Buffer.from(textPng), top: 0, left: 0 }])
+      .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
       .png()
       .toBuffer();
     return await fal.storage.upload(new Blob([new Uint8Array(out)], { type: "image/png" }));
