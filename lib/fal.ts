@@ -605,7 +605,8 @@ export async function captionImage(
       .png()
       .toBuffer();
     return await fal.storage.upload(new Blob([new Uint8Array(out)], { type: "image/png" }));
-  } catch {
+  } catch (e) {
+    console.error("captionImage failed:", e); // fail-safe below; log so prod issues are visible
     return url; // fail-safe — never block delivery
   }
 }
