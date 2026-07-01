@@ -8,6 +8,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Native addon (meme-caption font rendering) — keep external so Turbopack doesn't bundle the .node binary.
+  serverExternalPackages: ["@resvg/resvg-js"],
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

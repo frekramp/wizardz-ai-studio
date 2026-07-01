@@ -20,9 +20,18 @@ import {
   hoodFix,
   handFix,
   zoomFill,
+  captionImage,
+  applyEyes,
   LORA_URL,
   MASTER_URL,
 } from "@/lib/fal";
+import {
+  findMemePreset,
+  sanitizeCaption,
+  normalizeCaptionPosition,
+  type CaptionPosition,
+} from "@/lib/memes";
+import { pickEyeTrait, normalizeEye, type EyeKey } from "@/lib/eyes";
 import { OPENAI_ENABLED, openaiWizardImages, pickBest } from "@/lib/openai";
 import { rateLimit } from "@/lib/ratelimit";
 import { readSession, makeClaim } from "@/lib/session";
@@ -41,8 +50,14 @@ const MOTION: Record<string, string> = {
 
 // Text → image. PRIMARY engine: recolor/scene-swap the user-approved CANONICAL MASTER (the locked
 // look — no necks, dress robe, glossy style). Fallbacks: trained LoRA, Kontext-on-banner, base.
-function imageRequest(prompt: string, style: string | undefined, aspect: string | undefined, count: number) {
-  const master = masterRequest(prompt, aspect, count);
+function imageRequest(
+  prompt: string,
+  style: string | undefined,
+  aspect: string | undefined,
+  count: number,
+  blankFace = false,
+) {
+  const master = masterRequest(prompt, aspect, count, blankFace);
   if (master) return master;
   if (LORA_URL) {
     return { model: MODELS.imageLora, input: loraInput(buildPrompt(prompt, style, true), aspect, count) };
@@ -65,8 +80,9 @@ function wizRequest(
   style: string | undefined,
   aspect: string | undefined,
   count: number,
+  blankFace = false,
 ) {
-  const master = masterRequest(`${traitPhrasesFor(n)} ${scene}`.trim(), aspect, count);
+  const master = masterRequest(`${traitPhrasesFor(n)} ${scene}`.trim(), aspect, count, blankFace);
   if (master) return master;
   if (LORA_URL) {
     return { model: MODELS.imageLora, input: loraInput(buildWizLoraPrompt(traitPhrasesFor(n), scene, style), aspect, count) };
@@ -90,6 +106,10 @@ export async function POST(req: Request) {
     motion?: string;
     imageUrl?: string; // recreate: the uploaded image (already on fal.storage via /api/upload)
     wiz?: number; // wiz: the collection number to star
+    memeTag?: string; // meme: the chosen/typed preset tag (gm, wagmi, …)
+    caption?: string; // meme: the text to overlay on the final image
+    captionPos?: string; // meme: "top" | "bottom"
+    eyes?: string; // eyes: explicit trait from the UI picker (overrides prompt parsing)
   } = {};
   try {
     body = await req.json();
@@ -98,9 +118,30 @@ export async function POST(req: Request) {
   }
 
   const rawMode =
-    body.mode === "gif" || body.mode === "recreate" || body.mode === "wiz" ? body.mode : "image";
+    body.mode === "gif" || body.mode === "recreate" || body.mode === "wiz" || body.mode === "meme"
+      ? body.mode
+      : "image";
   const prompt = (body.prompt ?? "").trim();
   const wizN = Number(body.wiz);
+
+  // MEME mode: resolve the chosen/typed preset, then let any explicit field override it. The scene
+  // feeds the same focused master engine as Image mode; the caption is overlaid AFTER generation.
+  const memePreset =
+    rawMode === "meme" ? findMemePreset(body.memeTag) ?? findMemePreset(prompt) : undefined;
+  // If the whole prompt is just a known tag (e.g. "wagmi"), expand it to the preset's scene.
+  const memeScene = (prompt && !findMemePreset(prompt) ? prompt : memePreset?.prompt ?? prompt).trim();
+  const memeCaption = sanitizeCaption(body.caption ?? memePreset?.caption ?? "");
+  const memePos: CaptionPosition = normalizeCaptionPosition(body.captionPos ?? memePreset?.position);
+
+  // EYES trait: an explicit picker value wins; else parse the prompt (incl. the meme scene). null →
+  // no eye keyword → keep the normal glowing eyes (no blank face, no overlay). Not for recreate/gif.
+  const eyeText = rawMode === "meme" ? `${prompt} ${memeScene}` : prompt;
+  const eyeKey: EyeKey | null =
+    rawMode === "recreate" || rawMode === "gif"
+      ? null
+      : body.eyes
+        ? normalizeEye(body.eyes)
+        : pickEyeTrait(eyeText);
 
   // Per-mode input: recreate/wiz take an image/number as input, so the text prompt is optional.
   if (rawMode === "recreate") {
@@ -124,6 +165,10 @@ export async function POST(req: Request) {
         { error: `Wizardz #${wizN} wasn't minted — try another.` },
         { status: 400 },
       );
+    }
+  } else if (rawMode === "meme") {
+    if (memeScene.length < 3) {
+      return NextResponse.json({ error: "Pick a meme or describe a scene." }, { status: 400 });
     }
   } else if (prompt.length < 3) {
     return NextResponse.json({ error: "Please enter a longer prompt." }, { status: 400 });
@@ -221,8 +266,10 @@ export async function POST(req: Request) {
       rawMode === "recreate"
         ? recreateRequest(body.imageUrl as string, prompt, variants)
         : rawMode === "wiz"
-          ? wizRequest(wizN, prompt, body.style, body.aspect, variants)
-          : imageRequest(prompt, body.style, body.aspect, variants);
+          ? wizRequest(wizN, prompt, body.style, body.aspect, variants, !!eyeKey)
+          : rawMode === "meme"
+            ? imageRequest(memeScene, body.style, body.aspect, variants, !!eyeKey)
+            : imageRequest(prompt, body.style, body.aspect, variants, !!eyeKey);
     if (!built) {
       await refund(idKey, "image", 1);
       return NextResponse.json({ error: "Couldn't resolve that wizard." }, { status: 400 });
@@ -245,7 +292,15 @@ export async function POST(req: Request) {
       const vetted = await vetVariants(out.urls);
       const picked = vetted.length > 1 ? [await pickBest(vetted)] : vetted; // best-of-N → one image
       const necked = await hoodFix(picked); // neck-fix at the source (conditional)
-      const urls = await handFix(necked); // hand-fix at the source (conditional)
+      let urls = await handFix(necked); // hand-fix at the source (conditional)
+      // EYES trait: overlay the chosen eye art onto the blank face (the model drew none).
+      if (eyeKey) {
+        urls = await Promise.all(urls.map((u) => applyEyes(u, eyeKey)));
+      }
+      // Meme mode: bake the caption on as a real text layer (the model can't spell it reliably).
+      if (rawMode === "meme" && memeCaption) {
+        urls = await Promise.all(urls.map((u) => captionImage(u, memeCaption, memePos)));
+      }
       return NextResponse.json({
         urls,
         kind: "image",
@@ -266,7 +321,13 @@ export async function POST(req: Request) {
       const fixed = await hoodFix(out.urls);
       const vetted = await vetVariants(fixed);
       const picked = vetted.length > 1 ? [await pickBest(vetted)] : vetted; // best-of-N → one image
-      const urls = await zoomFill(picked); // free center zoom so the wizard fills the frame
+      let urls = await zoomFill(picked); // free center zoom so the wizard fills the frame
+      if (eyeKey) {
+        urls = await Promise.all(urls.map((u) => applyEyes(u, eyeKey)));
+      }
+      if (rawMode === "meme" && memeCaption) {
+        urls = await Promise.all(urls.map((u) => captionImage(u, memeCaption, memePos)));
+      }
       return NextResponse.json({
         urls,
         kind: "image",

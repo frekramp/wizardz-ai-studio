@@ -18,13 +18,26 @@ import {
   Hash,
   X,
   Dices,
+  Laugh,
+  Type,
+  ArrowUpToLine,
+  ArrowDownToLine,
+  Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WizardArt } from "@/components/wizard-placeholder";
 import { useHolder } from "@/components/holder-provider";
 import { addHistory } from "@/lib/history";
+import {
+  MEME_PRESETS,
+  MEME_MAX_CAPTION,
+  findMemePreset,
+  type MemePreset,
+  type CaptionPosition,
+} from "@/lib/memes";
+import { EYE_KEYS, EYE_LABELS, type EyeKey } from "@/lib/eyes";
 
-type Mode = "image" | "gif" | "recreate" | "wiz";
+type Mode = "image" | "gif" | "recreate" | "wiz" | "meme";
 type Phase = "idle" | "loading" | "result";
 type Result = { urls: string[]; kind: "image" | "video" } | null;
 
@@ -96,6 +109,7 @@ const CHIPS: Record<Mode, string[]> = {
     "holding a glowing bitcoin",
     "epic hero portrait, nebula behind",
   ],
+  meme: [], // meme mode uses the preset buttons instead of generic chips
 };
 
 const MOTIONS = ["Float", "Bounce", "Spin", "Pulse"];
@@ -134,6 +148,10 @@ export function AiStudio() {
   const [uploadPreview, setUploadPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [wizNum, setWizNum] = useState("");
+  const [caption, setCaption] = useState("");
+  const [captionPos, setCaptionPos] = useState<CaptionPosition>("bottom");
+  const [memeTag, setMemeTag] = useState("");
+  const [eyeSel, setEyeSel] = useState<EyeKey | "">(""); // "" = auto (parse the prompt)
   const [dragOver, setDragOver] = useState(false);
   const [wizPreview, setWizPreview] = useState<{
     n: number;
@@ -155,12 +173,23 @@ export function AiStudio() {
   const wizValue = Number(wizNum);
   const wizValid = Number.isInteger(wizValue) && wizValue >= 1 && wizValue <= WIZ_MAX;
   const wizMinted = !wizSet || wizSet.has(wizValue); // 3 numbers are unminted gaps
+  // Meme is ready with a typed/clicked scene OR a bare preset tag (e.g. "gm") the server expands.
+  const memeReady = prompt.trim().length >= 2 || !!findMemePreset(prompt.trim());
   const hasInput =
     mode === "recreate"
       ? !!uploadFile
       : mode === "wiz"
         ? wizValid && wizMinted
-        : prompt.trim().length > 2;
+        : mode === "meme"
+          ? memeReady
+          : prompt.trim().length > 2;
+  const applyPreset = (p: MemePreset) => {
+    setPrompt(p.prompt);
+    setCaption(p.caption);
+    setCaptionPos(p.position);
+    setMemeTag(p.tag);
+    setError(null);
+  };
   const canGenerate = phase !== "loading" && !uploading && hasInput && !overQuota;
 
   const onPickFile = (f: File | null | undefined) => {
@@ -265,7 +294,11 @@ export function AiStudio() {
         ? `Wizard #${wizValue}${prompt.trim() ? " — " + prompt.trim() : ""}`
         : usedMode === "recreate"
           ? prompt.trim() || "Recreated image"
-          : prompt.trim();
+          : usedMode === "meme"
+            ? caption.trim()
+              ? `"${caption.trim()}" meme`
+              : prompt.trim() || "Meme"
+            : prompt.trim();
     setResultMode(mode);
     setResult(null);
     setActiveIdx(0);
@@ -298,6 +331,10 @@ export function AiStudio() {
           motion: MOTIONS[motionKind],
           imageUrl,
           wiz: usedMode === "wiz" ? wizValue : undefined,
+          memeTag: usedMode === "meme" ? memeTag : undefined,
+          caption: usedMode === "meme" ? caption : undefined,
+          captionPos: usedMode === "meme" ? captionPos : undefined,
+          eyes: usedMode === "image" ? eyeSel || undefined : undefined,
         }),
       });
       const data = await res.json();
@@ -663,7 +700,7 @@ export function AiStudio() {
       {/* steps */}
       <div className="mt-5 grid grid-cols-3 overflow-hidden rounded-xl border border-line/60 bg-panel/70 text-center">
         {[
-          ["01", mode === "recreate" ? "Upload" : mode === "wiz" ? "Pick #" : "Describe"],
+          ["01", mode === "recreate" ? "Upload" : mode === "wiz" ? "Pick #" : mode === "meme" ? "Pick meme" : "Describe"],
           ["02", isGif ? "Animate" : "Generate"],
           ["03", "Share"],
         ].map(([n, label], i) => (
@@ -709,13 +746,14 @@ export function AiStudio() {
         <div
           role="tablist"
           aria-label="Generation mode"
-          className="mb-3 grid grid-cols-4 gap-1 rounded-full border border-line/60 bg-night/50 p-1"
+          className="mb-3 grid grid-cols-5 gap-1 rounded-full border border-line/60 bg-night/50 p-1"
         >
           {(
             [
               { id: "image", label: "Image", icon: ImageIcon },
               { id: "gif", label: "GIF", icon: Film },
               { id: "recreate", label: "Recreate", icon: Upload },
+              { id: "meme", label: "Meme", icon: Laugh },
               { id: "wiz", label: "Wiz #", icon: Hash },
             ] as const
           ).map((t) => (
@@ -723,13 +761,15 @@ export function AiStudio() {
               key={t.id}
               role="tab"
               aria-selected={mode === t.id}
+              title={t.label}
+              aria-label={t.label}
               onClick={() => {
                 setMode(t.id);
                 setError(null);
                 setNotice(null);
               }}
               className={cn(
-                "relative flex items-center justify-center gap-1.5 rounded-full px-2 py-2 text-[13px] font-medium transition-colors sm:gap-2 sm:px-3 sm:text-sm",
+                "relative flex items-center justify-center gap-1.5 rounded-full px-2 py-2 text-[13px] font-medium transition-colors sm:px-2.5 sm:text-sm",
                 mode === t.id ? "text-night" : "text-mute hover:text-ink",
               )}
             >
@@ -741,7 +781,8 @@ export function AiStudio() {
                 />
               )}
               <t.icon className="relative size-4 shrink-0" />
-              <span className="relative">{t.label}</span>
+              {/* labels hide on the smallest screens so five tabs fit; icons + tooltips remain */}
+              <span className="relative hidden sm:inline">{t.label}</span>
             </button>
           ))}
         </div>
@@ -878,6 +919,65 @@ export function AiStudio() {
               className="ring-focus w-full resize-none rounded-xl border border-line bg-night/40 p-3.5 text-ink placeholder:text-faint focus:border-orange/50"
             />
           </div>
+        ) : mode === "meme" ? (
+          <div className="space-y-2.5">
+            {/* preset templates — clicking fills the scene + caption */}
+            <div className="flex flex-wrap gap-2">
+              {MEME_PRESETS.map((p) => (
+                <button
+                  key={p.tag}
+                  type="button"
+                  onClick={() => applyPreset(p)}
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                    memeTag === p.tag
+                      ? "border-orange/60 bg-orange/10 text-ink"
+                      : "border-line/70 bg-night/40 text-mute hover:border-orange/40 hover:text-ink",
+                  )}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={prompt}
+              onChange={(e) => {
+                setPrompt(e.target.value);
+                setMemeTag(""); // typing your own scene de-selects the preset chip
+              }}
+              rows={2}
+              placeholder="Pick a meme above, or describe a scene (e.g. red gm)…"
+              className="ring-focus w-full resize-none rounded-xl border border-line bg-night/40 p-3.5 text-ink placeholder:text-faint focus:border-orange/50"
+            />
+            {/* caption text + where it sits — overlaid on the final image as real text */}
+            <div className="flex items-center gap-2">
+              <div className="flex flex-1 items-center rounded-xl border border-line bg-night/40 px-3">
+                <Type className="size-4 shrink-0 text-faint" />
+                <input
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value)}
+                  maxLength={MEME_MAX_CAPTION}
+                  placeholder="Caption (e.g. GM)"
+                  aria-label="Meme caption"
+                  className="ring-focus w-full bg-transparent py-2.5 pl-2 text-ink placeholder:text-faint focus:outline-none"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setCaptionPos((p) => (p === "top" ? "bottom" : "top"))}
+                title="Caption position"
+                aria-label={`Caption position: ${captionPos}`}
+                className="flex shrink-0 items-center gap-1.5 rounded-xl border border-line/70 bg-night/40 px-3 py-2.5 text-sm capitalize text-mute transition-colors hover:border-orange/40 hover:text-ink"
+              >
+                {captionPos === "top" ? (
+                  <ArrowUpToLine className="size-4" />
+                ) : (
+                  <ArrowDownToLine className="size-4" />
+                )}
+                {captionPos}
+              </button>
+            </div>
+          </div>
         ) : (
           <textarea
             value={prompt}
@@ -888,18 +988,59 @@ export function AiStudio() {
           />
         )}
 
-        {/* example chips */}
-        <div className="mt-2.5 flex flex-wrap gap-2">
-          {CHIPS[mode].map((c) => (
-            <button
-              key={c}
-              onClick={() => setPrompt(c)}
-              className="rounded-full border border-line/70 bg-night/40 px-3 py-1.5 text-xs text-mute transition-colors hover:border-orange/40 hover:text-ink"
-            >
-              {c}
-            </button>
-          ))}
-        </div>
+        {/* example chips (meme mode uses its own preset buttons above instead) */}
+        {mode !== "meme" && (
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            {CHIPS[mode].map((c) => (
+              <button
+                key={c}
+                onClick={() => setPrompt(c)}
+                className="rounded-full border border-line/70 bg-night/40 px-3 py-1.5 text-xs text-mute transition-colors hover:border-orange/40 hover:text-ink"
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* eyes trait picker (image mode) — Auto = parse the prompt; a pick overrides it */}
+        {mode === "image" && (
+          <div className="mt-3">
+            <div className="mb-1.5 flex items-center gap-1.5 px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-faint">
+              <Eye className="size-3" /> Eyes
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => setEyeSel("")}
+                className={cn(
+                  "flex h-9 items-center rounded-lg border px-2.5 text-xs font-medium transition-colors",
+                  eyeSel === ""
+                    ? "border-orange/60 bg-orange/10 text-ink"
+                    : "border-line/70 bg-night/40 text-mute hover:border-orange/40 hover:text-ink",
+                )}
+              >
+                Auto
+              </button>
+              {EYE_KEYS.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setEyeSel(k)}
+                  title={EYE_LABELS[k]}
+                  aria-label={`${EYE_LABELS[k]} eyes`}
+                  className={cn(
+                    "grid size-9 place-items-center rounded-lg border bg-night/60 transition-colors",
+                    eyeSel === k ? "border-orange/70 ring-1 ring-orange/50" : "border-line/70 hover:border-orange/40",
+                  )}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`/brand/eyes/${k}.png`} alt={EYE_LABELS[k]} className="max-h-5 max-w-6 object-contain" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* controls + CTA */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -925,6 +1066,8 @@ export function AiStudio() {
               <Film className="size-4" />
             ) : mode === "recreate" ? (
               <Upload className="size-4" />
+            ) : mode === "meme" ? (
+              <Laugh className="size-4" />
             ) : (
               <Sparkles className="size-4" />
             )}
@@ -942,7 +1085,9 @@ export function AiStudio() {
                       ? wizValid
                         ? `Summon #${wizValue}`
                         : "Enter a #"
-                      : "Cast the spell"}
+                      : mode === "meme"
+                        ? "Make the meme"
+                        : "Cast the spell"}
           </button>
         </div>
       </div>

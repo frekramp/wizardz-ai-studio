@@ -255,10 +255,24 @@ export function pickRobeColor(prompt: string): { key: string; desc: string } {
 // locked to the exact approved look — only the robe colour and the background change, so the
 // flaky neck/robe-drift of fresh generation can't appear (this is the method the user signed off).
 // Returns null if no master is configured (caller falls back to the LoRA / banner path).
-export function masterRequest(prompt: string, aspect: string | undefined, count: number) {
+export function masterRequest(
+  prompt: string,
+  aspect: string | undefined,
+  count: number,
+  blankFace = false,
+) {
   if (!MASTER_URL) return null;
   const req = prompt.trim() || "the same wizard, simple plain background";
   const color = pickRobeColor(req); // named colour in the prompt, else random — never forced blue
+  // When an EYES trait is requested, render a BLANK face (no eyes) so the chosen eye PNG can be
+  // overlaid cleanly — the image model never draws the eyes (lib/eyes + applyEyes do that).
+  const faceClause = blankFace
+    ? "a completely smooth EMPTY matte-black face with NO eyes, no glowing eyes, no mouth and no " +
+      "facial features at all — a totally blank flat black face"
+    : "a matte-black featureless face with two large glowing white oval eyes";
+  const keepColours = blankFace
+    ? "the black face and black gloves keep their colours"
+    : "the black face, white eyes and black gloves keep their colours";
   // FOCUS ORDER MATTERS (verified on the 5 real failed cases): LEAD with the two transforms — render
   // the SETTING as the full background + RE-POSE for the ACTION — then the identity lock as a tight
   // secondary clause. Burying the scene/action directive behind a long KEEP-IDENTICAL wall made Kontext
@@ -271,14 +285,13 @@ export function masterRequest(prompt: string, aspect: string | undefined, count:
     "(1) RENDER the described place and setting as the full, detailed background that fills the entire " +
     "frame behind the wizard; (2) RE-POSE the wizard so it is actively performing the described action " +
     "in the foreground, its arms and gloved hands holding or using whatever the action needs. " +
-    "While doing that, keep the CHARACTER on-model: a matte-black featureless face with two large " +
-    "glowing white oval eyes; the hood wrapped snug under the chin so no neck or skin shows; smooth " +
-    "black mitten gloves; a single one-piece floor-length hooded robe (hem to the ground, long sleeves " +
-    "over both arms — never pants, a split robe, two legs, bare arms or skin); the glossy cel-shaded " +
-    "cartoon style; and the COMPLETE full body visible from hood-tip to feet, centered and never " +
-    "cropped to a bust. " +
-    `Recolor the hood and robe fabric to ${color.desc} — only the fabric; the black face, white eyes ` +
-    "and black gloves keep their colours and the colour must not bleed onto them. " +
+    `While doing that, keep the CHARACTER on-model: ${faceClause}; the hood wrapped snug under the ` +
+    "chin so no neck or skin shows; smooth black mitten gloves; a single one-piece floor-length hooded " +
+    "robe (hem to the ground, long sleeves over both arms — never pants, a split robe, two legs, bare " +
+    "arms or skin); the glossy cel-shaded cartoon style; and the COMPLETE full body visible from " +
+    "hood-tip to feet, centered and never cropped to a bust. " +
+    `Recolor the hood and robe fabric to ${color.desc} — only the fabric; ${keepColours} and the ` +
+    "colour must not bleed onto them. " +
     "Make the requested action and setting unmistakable at a glance. " +
     `Request: ${req}`;
   // TIGHT faithfulness (guidance 3.5) — locked in via the faithfulness tuning grid: follows the
@@ -481,6 +494,189 @@ export async function zoomFill(urls: string[]): Promise<string[]> {
     );
   } catch {
     return urls; // fail-safe (e.g. sharp unavailable) — never block delivery
+  }
+}
+
+// ── MEME caption overlay ───────────────────────────────────────────────────────────────────────
+// Bake the meme caption onto the finished PNG as a REAL text layer — the image model misspells words,
+// so we never let it draw text. Heavy uppercase white glyphs with a thick black outline, auto-sized to
+// the image width (wraps to two balanced lines when long), pinned top or bottom. The text is rendered
+// with @resvg/resvg-js using the bundled ANTON font (loaded as a buffer, not the system fontconfig) so
+// output is byte-identical on macOS + Vercel; sharp then composites the transparent text layer onto the
+// image. Fail-safe: any error returns the original url so delivery never breaks.
+function xmlEscape(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+const CAPTION_FONT = "Anton"; // the bundled display font resvg loads from FONT_URL
+
+// Anton TTF on fal.storage (uploaded from assets/fonts/Anton-Regular.ttf). Fetched once and cached for
+// the life of the (warm) function; resvg needs the raw font bytes.
+const FONT_URL = "https://v3b.fal.media/files/b/0aa07786/hPfbgydZs-i12rMe5LCVD_1782885180593.ttf";
+let captionFontPromise: Promise<Buffer> | null = null;
+function captionFont(): Promise<Buffer> {
+  if (!captionFontPromise) {
+    captionFontPromise = fetch(FONT_URL)
+      .then((r) => r.arrayBuffer())
+      .then((ab) => Buffer.from(new Uint8Array(ab)))
+      .catch((e) => {
+        captionFontPromise = null; // let the next call retry
+        throw e;
+      });
+  }
+  return captionFontPromise;
+}
+
+function memeCaptionSvg(text: string, W: number, H: number, position: "top" | "bottom"): string {
+  const up = text.toUpperCase();
+  const budget = W * 0.9; // horizontal text budget
+  const CHAR_W = 0.74; // avg glyph width / font-size for a wide heavy caps face (keeps us from clipping)
+  const maxFont = Math.round(H * 0.16);
+  const fit = (line: string) => budget / Math.max(1, line.length * CHAR_W);
+
+  // One line first; wrap to two balanced lines only if that lets the text be bigger.
+  let lines = [up];
+  let fontSize = Math.min(maxFont, fit(up));
+  if (fontSize < maxFont * 0.62 && up.includes(" ")) {
+    const words = up.split(/\s+/);
+    let best: { lines: string[]; fs: number } | null = null;
+    for (let i = 1; i < words.length; i++) {
+      const a = words.slice(0, i).join(" ");
+      const b = words.slice(i).join(" ");
+      const fs = Math.min(maxFont, fit(a.length >= b.length ? a : b));
+      if (!best || fs > best.fs) best = { lines: [a, b], fs };
+    }
+    if (best && best.fs > fontSize) {
+      lines = best.lines;
+      fontSize = best.fs;
+    }
+  }
+  fontSize = Math.round(Math.max(fontSize, maxFont * 0.34));
+
+  const lineH = fontSize * 1.05;
+  const stroke = Math.max(2, Math.round(fontSize * 0.13));
+  const pad = Math.round(H * 0.05);
+  const n = lines.length;
+  const firstBaseline = position === "top" ? pad + fontSize : H - pad - (n - 1) * lineH;
+  const texts = lines
+    .map(
+      (ln, i) =>
+        `<text x="${W / 2}" y="${Math.round(firstBaseline + i * lineH)}" text-anchor="middle" ` +
+        `font-family='${CAPTION_FONT}' font-size="${fontSize}" font-weight="900" fill="#ffffff" ` +
+        `stroke="#000000" stroke-width="${stroke}" paint-order="stroke" stroke-linejoin="round">` +
+        `${xmlEscape(ln)}</text>`,
+    )
+    .join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">${texts}</svg>`;
+}
+
+// Overlay one caption onto one image; returns a new fal.media URL (or the original on any failure).
+export async function captionImage(
+  url: string,
+  caption: string,
+  position: "top" | "bottom" = "bottom",
+): Promise<string> {
+  const text = caption.trim();
+  if (!text) return url;
+  try {
+    const sharp = (await import("sharp")).default;
+    const { Resvg } = await import("@resvg/resvg-js");
+    const font = await captionFont();
+    const ab = (await fetch(url).then((r) => r.arrayBuffer())) as ArrayBuffer;
+    const input = Buffer.from(new Uint8Array(ab));
+    const meta = await sharp(input).metadata();
+    const W = meta.width ?? 1024;
+    const H = meta.height ?? 1024;
+    const svg = memeCaptionSvg(text, W, H, position);
+    // Render the transparent text layer with Anton (from the buffer — deterministic across hosts).
+    // resvg-js 2.6.2 accepts `fontBuffers` at runtime but its types omit it, so assert the option shape.
+    const resvgOptions = {
+      font: { fontBuffers: [font], defaultFontFamily: CAPTION_FONT, loadSystemFonts: false },
+      background: "rgba(0,0,0,0)",
+    } as unknown as ConstructorParameters<typeof Resvg>[1];
+    const textPng = new Resvg(svg, resvgOptions).render().asPng();
+    const out = await sharp(input)
+      .composite([{ input: Buffer.from(textPng), top: 0, left: 0 }])
+      .png()
+      .toBuffer();
+    return await fal.storage.upload(new Blob([new Uint8Array(out)], { type: "image/png" }));
+  } catch {
+    return url; // fail-safe — never block delivery
+  }
+}
+
+// ── EYES trait overlay ───────────────────────────────────────────────────────────────────────────
+// Composite a transparent eye PNG onto the BLANK-faced wizard — the image model draws no eyes, we
+// overlay the exact art. TUNE the placement here: ONE config, applied to every generation. Values are
+// fractions of the IMAGE (the wizard renders full-body + centred, so the face sits at a consistent
+// spot). Fail-safe: any error returns the original url so delivery never breaks. The eye art is hosted
+// on fal.storage (EYE_URLS below) — public/ files aren't on the Vercel serverless filesystem, so we
+// fetch by URL. Re-host with scripts/upload-eyes.mjs and update EYE_URLS if the art changes.
+const EYE_OVERLAY = {
+  scale: 0.15, // DEFAULT eye-overlay width ÷ image width (per-eye overrides in EYE_SCALES below)
+  xOffset: 0, // horizontal nudge from centre, + = right (fraction of image width)
+  yCenter: 0.28, // vertical centre of the eyes (fraction of image height, from the top)
+};
+
+// Per-eye scale overrides — some eye arts read better a touch larger/smaller. Any eye NOT listed here
+// falls back to EYE_OVERLAY.scale. Tuned from the scale-comparison grid; add the rest as they're dialed.
+const EYE_SCALES: Partial<Record<string, number>> = {
+  rage: 0.18,
+  sleepy: 0.18,
+  og: 0.15,
+};
+
+// Eye art hosted on fal.storage (uploaded via scripts/upload-eyes.mjs). Keyed by eye trait.
+const EYE_URLS: Record<string, string> = {
+  rage: "https://v3b.fal.media/files/b/0aa07732/gDWsbv1gHjVH23PGLoTMm_1782884343924.png",
+  wut: "https://v3b.fal.media/files/b/0aa0773c/6ycXJ-_aGIA8ErqLnS29G_1782884346858.png",
+  flame: "https://v3b.fal.media/files/b/0aa07732/LWWeGS-kw_IVV4JGqfCXA_1782884348142.png",
+  diamond: "https://v3b.fal.media/files/b/0aa07732/IeizmKnatJgYbLcNGC0eV_1782884349498.png",
+  fent: "https://v3b.fal.media/files/b/0aa07733/kPI7M-IiKwBmDqYyKzQ9s_1782884350884.png",
+  sleepy: "https://v3b.fal.media/files/b/0aa07733/3GRd5zwaRksjPvKpV-Ixu_1782884352457.png",
+  joy: "https://v3b.fal.media/files/b/0aa07733/db1nt3fxItEeiZO8v7CEP_1782884353749.png",
+  stoic: "https://v3b.fal.media/files/b/0aa07733/4yW18WSs7HA1XriEHn3rT_1782884355132.png",
+  wide: "https://v3b.fal.media/files/b/0aa07733/yvX9mN0tkQO1SI1o0cqKU_1782884356653.png",
+  focused: "https://v3b.fal.media/files/b/0aa0773d/QSoWOiyMLWtDP-7kaej9F_1782884357951.png",
+  loopy: "https://v3b.fal.media/files/b/0aa07733/CZIHwB0I8jzu2i96soGQu_1782884359273.png",
+  stern: "https://v3b.fal.media/files/b/0aa07734/wqhlkL2Kzb_vo7iRO1EtA_1782884360749.png",
+  og: "https://v3b.fal.media/files/b/0aa07734/lwiHZHziTLCB_CM-An_VT_1782884362075.png",
+};
+
+export async function applyEyes(url: string, eyeKey: string): Promise<string> {
+  const eyeUrl = EYE_URLS[eyeKey];
+  if (!eyeUrl) return url; // unknown eye → deliver the base unchanged
+  try {
+    const sharp = (await import("sharp")).default;
+    const eyeAb = (await fetch(eyeUrl).then((r) => r.arrayBuffer())) as ArrayBuffer;
+    const eyeArt = Buffer.from(new Uint8Array(eyeAb));
+    const ab = (await fetch(url).then((r) => r.arrayBuffer())) as ArrayBuffer;
+    const base = Buffer.from(new Uint8Array(ab));
+    const meta = await sharp(base).metadata();
+    const W = meta.width ?? 1024;
+    const H = meta.height ?? 1024;
+    const scale = EYE_SCALES[eyeKey] ?? EYE_OVERLAY.scale; // per-eye override, else the default
+    const eyeBuf = await sharp(eyeArt)
+      .resize({ width: Math.round(W * scale) })
+      .png()
+      .toBuffer();
+    const em = await sharp(eyeBuf).metadata();
+    const ew = em.width ?? 1;
+    const eh = em.height ?? 1;
+    const left = Math.round(W / 2 + EYE_OVERLAY.xOffset * W - ew / 2);
+    const top = Math.round(H * EYE_OVERLAY.yCenter - eh / 2);
+    const out = await sharp(base)
+      .composite([{ input: eyeBuf, left, top }])
+      .png()
+      .toBuffer();
+    return await fal.storage.upload(new Blob([new Uint8Array(out)], { type: "image/png" }));
+  } catch {
+    return url; // fail-safe — never block delivery
   }
 }
 

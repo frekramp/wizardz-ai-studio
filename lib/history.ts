@@ -7,7 +7,7 @@ export type HistoryItem = {
   urls: string[];
   kind: "image" | "video";
   prompt: string;
-  mode: "image" | "gif" | "recreate" | "wiz";
+  mode: "image" | "gif" | "recreate" | "wiz" | "meme";
   createdAt: number;
 };
 
